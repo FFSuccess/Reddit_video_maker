@@ -38,12 +38,12 @@ SCOPES = [
 def get_authenticated_service(token_file='token.pickle', secrets_file='client_secrets.json'):
     creds = None
 
-    # Check if token file exists
+    #check if token file exists
     if os.path.exists(token_file):
         with open(token_file, 'rb') as token:
             creds = pickle.load(token)
 
-    # If credentials are invalid or don't exist, authenticate
+    #if credentials are invalid or don't exist, authenticate
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -52,7 +52,7 @@ def get_authenticated_service(token_file='token.pickle', secrets_file='client_se
                 secrets_file, SCOPES)
             creds = flow.run_local_server(port=0)
 
-            # Show which account was authenticated
+            #show which account was authenticated
             youtube_temp = build('youtube', 'v3', credentials=creds)
             channel_response = youtube_temp.channels().list(
                 part='snippet',
@@ -63,14 +63,13 @@ def get_authenticated_service(token_file='token.pickle', secrets_file='client_se
             print(f"\n Authenticated as: {channel_title}")
             print(f"  Credentials saved to: {token_file}\n")
 
-        # Save credentials for future use
+        #save credentials for future use
         with open(token_file, 'wb') as token:
             pickle.dump(creds, token)
 
     return build('youtube', 'v3', credentials=creds)
 
 def verify_account(youtube):
-    """Display which YouTube channel will receive the upload."""
     try:
         channel_response = youtube.channels().list(
             part='snippet',
@@ -107,17 +106,17 @@ def upload_video(youtube, video_file, title, description, category='22',
         }
     }
 
-    # Create MediaFileUpload object
+    #create MediaFileUpload object
     media = MediaFileUpload(video_file, chunksize=-1, resumable=True)
 
-    # Create the upload request
+    #create the upload request
     request = youtube.videos().insert(
         part=','.join(body.keys()),
         body=body,
         media_body=media
     )
 
-    # Execute the request with resumable upload
+    #execute the request
     response = None
     print(f"Uploading video: {title}")
 
@@ -176,7 +175,7 @@ def add_subtitles(video_path, subtitles_data, output_path,
     final_video.close()
 
 def auto_generate_subtitles(video_path, output_path, font_path):
-    model = whisper.load_model("small")  # balanced accuracy/speed
+    model = whisper.load_model("small")  
 
     result = model.transcribe(video_path, word_timestamps=True)
     subtitles = []
@@ -217,7 +216,7 @@ def TTS_string(text, file_path):
         voice = "en-US-GuyNeural"
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(file_path)
-        print(f"✓ Edge TTS saved to {file_path}")
+        print(f"Edge TTS saved to {file_path}")
     asyncio.run(generate_speech())
 
 def get_media_duration(file_path: str) -> float:
@@ -281,11 +280,11 @@ def combine_audio_video(video_path: str, audio_path: str, output_path: str):
         raise
 
 def main():
-    # Setup Chrome driver
+    #setup Chrome driver
     driver = webdriver.Chrome()
     #read in cache of previously viewed stories
-    with open("Videos_seen.txt", "r") as videos_seen_file:
-        videos_seen = videos_seen_file.readlines()
+    with open("Videos_seen.pkl", "rb") as videos_seen_file:
+        videos_seen = pickle.load(videos_seen_file)
 
     try:
         # Navigate to a website
@@ -301,8 +300,8 @@ def main():
             if Title_text == "[No text]":
                 pass
             if not Title_text in videos_seen:
-                with open("Videos_seen.txt", "a") as videos_seen_file:
-                    videos_seen_file.write(Title_text + "\n")
+                with open("Videos_seen.pkl", "wb") as videos_seen_file:
+                    pickle.dump(videos_seen.append(Title_text), videos_seen_file)
                 break
         link_href = random_link.get_attribute("href")
 
@@ -386,9 +385,13 @@ def main():
             os.remove(AUDIO_OUTPUT_PATH)
         except NameError:
             pass
+        except FileNotFoundError:
+            pass
         try:
             os.remove(no_sub_output_path)
         except NameError:
+            pass
+        except FileNotFoundError:
             pass
         driver.quit()
         print("Browser closed")
