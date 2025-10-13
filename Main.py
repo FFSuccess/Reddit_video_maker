@@ -1,3 +1,4 @@
+print("Loading in AI model...")
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -175,7 +176,7 @@ def add_subtitles(video_path, subtitles_data, output_path,
     final_video.close()
 
 def auto_generate_subtitles(video_path, output_path, font_path):
-    model = whisper.load_model("small")  
+    model = whisper.load_model("small")
 
     result = model.transcribe(video_path, word_timestamps=True)
     subtitles = []
@@ -285,7 +286,7 @@ def main():
     #read in cache of previously viewed stories
     with open("Videos_seen.pkl", "rb") as videos_seen_file:
         videos_seen = pickle.load(videos_seen_file)
-
+    print(f"videos we have seen: {videos_seen}")
     try:
         # Navigate to a website
         driver.get("https://www.reddit.com/r/AskReddit/")
@@ -301,7 +302,8 @@ def main():
                 pass
             if not Title_text in videos_seen:
                 with open("Videos_seen.pkl", "wb") as videos_seen_file:
-                    pickle.dump(videos_seen.append(Title_text), videos_seen_file)
+                    videos_seen.append(Title_text)
+                    pickle.dump(videos_seen, videos_seen_file)
                 break
         link_href = random_link.get_attribute("href")
 
@@ -380,21 +382,15 @@ def main():
         print(f"Watch at: https://www.youtube.com/watch?v={video_response['id']}")
 
     finally:
-        #remove temp files
-        try:
-            os.remove(AUDIO_OUTPUT_PATH)
-        except NameError:
-            pass
-        except FileNotFoundError:
-            pass
-        try:
-            os.remove(no_sub_output_path)
-        except NameError:
-            pass
-        except FileNotFoundError:
-            pass
         driver.quit()
         print("Browser closed")
+        #remove temp files
+        sleep(10)
+        try:
+            for file in os.listdir(OUTPUT_FOLDER):
+                os.remove(os.path.join(OUTPUT_FOLDER, file))
+        except Exception as e:
+            print(f"Error removing file {e}")
 
 if __name__ == '__main__':
     main()
