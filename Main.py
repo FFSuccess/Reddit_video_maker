@@ -343,9 +343,6 @@ def main():
             if Title_text == "[No text]":
                 pass
             if not Title_text in videos_seen:
-                with open("Videos_seen.pkl", "wb") as videos_seen_file:
-                    videos_seen.append(Title_text)
-                    pickle.dump(videos_seen, videos_seen_file)
                 found_video = True
                 break
         if not found_video:
@@ -423,6 +420,9 @@ def main():
             privacy_status='public',
             tags=['reddit', 'story', 'fyp']
         )
+        with open("Videos_seen.pkl", "wb") as videos_seen_file:
+            videos_seen.append(Title_text)
+            pickle.dump(videos_seen, videos_seen_file)
         print(f"\nVideo uploaded successfully!")
         print(f"Watch at: https://www.youtube.com/watch?v={video_response['id']}")
     finally:
