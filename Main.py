@@ -321,10 +321,22 @@ def main():
         driver = setup_chrome_driver()
         driver.get("https://www.reddit.com/r/AskReddit/")
         randomised_sleep(2.0, 5.0)
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        randomised_sleep(1.0, 2.0)
         askreddit_links_xpath = driver.find_elements(
             By.XPATH,
             "//a[starts-with(@href, '/r/AskReddit/comments/')]"
         )
+
+        #filter for only posts with enought replies
+        filtered_askreddit_links_xpath = []
+        for link in askreddit_links_xpath:
+            parent_post = link.find_element(By.XPATH, "./ancestor::shreddit-post")
+            comment_count = parent_post.get_attribute("comment-count")
+            if int(comment_count) > 10:
+                filtered_askreddit_links_xpath.append(link)
+        askreddit_links_xpath = filtered_askreddit_links_xpath
+
         #choose story
         found_video = False
         for random_link in askreddit_links_xpath:
