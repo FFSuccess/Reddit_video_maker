@@ -1,3 +1,5 @@
+from sys import exception
+
 print("Loading in AI model...")
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -23,6 +25,9 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
 import pickle
+import undetected_chromedriver
+from selenium.webdriver.chrome.options import Options
+from random import uniform
 
 warnings.filterwarnings('ignore', module='whisper')
 FFMPEG_PATH = r"C:\Users\sdawk\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0-full_build\bin"
@@ -91,13 +96,16 @@ def verify_account(youtube):
 
 def upload_video(youtube, video_file, title, description, category='22',
                  privacy_status='private', tags=None):
+    if not title:
+        title = "Reddit story"
+    if len(title) > 100:
+        title = title[:100]
     if tags is None:
         tags = []
-
     body = {
         'snippet': {
-            'title': title,
-            'description': description,
+            'title': title.strip(),
+            'description': description.strip(),
             'tags': tags,
             'categoryId': category
         },
@@ -106,8 +114,6 @@ def upload_video(youtube, video_file, title, description, category='22',
             'selfDeclaredMadeForKids': False
         }
     }
-
-    #create MediaFileUpload object
     media = MediaFileUpload(video_file, chunksize=-1, resumable=True)
 
     #create the upload request
@@ -129,12 +135,8 @@ def upload_video(youtube, video_file, title, description, category='22',
     print(f"Upload complete! Video ID: {response['id']}")
     return response
 
-def add_subtitles(video_path, subtitles_data, output_path,
-                  font_path=FONT_PATH,
-                  font_size=80,
-                  font_color="yellow",
-                  stroke_color="black",
-                  stroke_width=10):
+def add_subtitles(video_path, subtitles_data, output_path, font_path=FONT_PATH, font_size=80,
+                  font_color="yellow", stroke_color="black", stroke_width=10):
     video = VideoFileClip(video_path)
     w, h = video.size
 
@@ -280,23 +282,52 @@ def combine_audio_video(video_path: str, audio_path: str, output_path: str):
         print("FFmpeg failed:\n", e.stderr)
         raise
 
+def randomised_sleep(low_bound, high_bound):
+    sleep(uniform(low_bound, high_bound))
+
+def setup_chrome_driver():
+    #randomize browser flags
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/16.4 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) "
+        "Gecko/20100101 Firefox/128.0"
+    ]
+
+    driver = undetected_chromedriver.Chrome(
+        headless=False,
+        use_subprocess=True,
+        version_main=None,
+        driver_executable_path=None
+    )
+    driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+        "userAgent": choice(user_agents)
+    })
+    randomised_sleep(2.0, 5.0)
+    return driver
+
 def main():
-    #setup Chrome driver
-    driver = webdriver.Chrome()
     #read in cache of previously viewed stories
-    with open("Videos_seen.pkl", "rb") as videos_seen_file:
-        videos_seen = pickle.load(videos_seen_file)
+    if os.path.exists("Videos_seen.pkl"):
+        with open("Videos_seen.pkl", "rb") as videos_seen_file:
+            videos_seen = pickle.load(videos_seen_file)
+    else:
+        videos_seen = []
     print(f"videos we have seen: {videos_seen}")
     try:
-        # Navigate to a website
+        #setup Chrome driver
+        driver = setup_chrome_driver()
         driver.get("https://www.reddit.com/r/AskReddit/")
+        randomised_sleep(2.0, 5.0)
         askreddit_links_xpath = driver.find_elements(
             By.XPATH,
             "//a[starts-with(@href, '/r/AskReddit/comments/')]"
         )
-        #choose story at random
-        random_link = choice(askreddit_links_xpath)
-        while True:
+        #choose story
+        found_video = False
+        for random_link in askreddit_links_xpath:
             Title_text = random_link.text.strip() or "[No text]"
             if Title_text == "[No text]":
                 pass
@@ -304,7 +335,10 @@ def main():
                 with open("Videos_seen.pkl", "wb") as videos_seen_file:
                     videos_seen.append(Title_text)
                     pickle.dump(videos_seen, videos_seen_file)
+                found_video = True
                 break
+        if not found_video:
+            raise Exception("Have seen all stories possible.")
         link_href = random_link.get_attribute("href")
 
         print(f"Randomly selected link: {Title_text}")
@@ -312,7 +346,7 @@ def main():
 
         #go to link for Question
         driver.get(str(link_href))
-        sleep(2)
+        randomised_sleep(4.0, 5.0)
 
         #find and extract responces
         responces = driver.find_elements(
@@ -380,11 +414,19 @@ def main():
         )
         print(f"\nVideo uploaded successfully!")
         print(f"Watch at: https://www.youtube.com/watch?v={video_response['id']}")
-
     finally:
-        driver.quit()
+        if driver:
+            try:
+                driver.quit()
+            except OSError as e:
+                if e.winerror == 6:
+                    pass
+                else:
+                    raise
+        driver = None
         print("Browser closed")
         #remove temp files
+        print(f"waiting for tempory files to no be in use to delete...")
         sleep(10)
         try:
             for file in os.listdir(OUTPUT_FOLDER):
