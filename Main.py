@@ -1,6 +1,5 @@
+print("Loading in AI model and liberaries...")
 from sys import exception
-
-print("Loading in AI model...")
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -401,7 +400,7 @@ def main():
         parcore_video_random = choice(parcore_videos)
         parcore_video_random = os.path.join(MINECRAFT_PARCORE_VIDS_FOLDER, parcore_video_random)
 
-        #combine with redit story with minecraft parcore
+        #combine with reddit story with minecraft parcore
         Output_file_name = f"{Title_text[:20]}.mp4"
         no_sub_output_path = os.path.join(OUTPUT_FOLDER, Output_file_name)
         combine_audio_video(parcore_video_random, AUDIO_OUTPUT_PATH, no_sub_output_path)
@@ -439,10 +438,11 @@ def main():
         print("Browser closed")
         #remove temp files
         print(f"waiting for tempory files to no be in use to delete...")
-        sleep(10)
+        sleep(5)
         try:
             for file in os.listdir(OUTPUT_FOLDER):
                 os.remove(os.path.join(OUTPUT_FOLDER, file))
+                print("Removed temp file: " + file)
         except Exception as e:
             print(f"Error removing file {e}")
 
