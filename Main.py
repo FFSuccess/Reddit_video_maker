@@ -29,16 +29,24 @@ from selenium.webdriver.chrome.options import Options
 from random import uniform
 
 warnings.filterwarnings('ignore', module='whisper')
+current_directory = os.getcwd()
 FFMPEG_PATH = r"C:\Users\sdawk\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0-full_build\bin"
-FONT_PATH = r"C:\Users\sdawk\PycharmProjects\AI_video_generator\Poppins-Black.ttf"
+FONT_PATH = os.path.join(current_directory, "Poppins-Black.ttf")
 LETTERS_COUNTED = set("zxcvbnmasdfghjklqwertyuiop1234567890ZXCVBNMASDFGHJKLQWERTYUIOP.,")
-AUDIO_OUTPUT_PATH = r"C:\Users\sdawk\PycharmProjects\AI_video_generator\Output\temp.mp3"
-MINECRAFT_PARCORE_VIDS_FOLDER = r"C:\Users\sdawk\PycharmProjects\AI_video_generator\.venv\Scripts\split_videos"
-OUTPUT_FOLDER = r"C:\Users\sdawk\PycharmProjects\AI_video_generator\Output"
+OUTPUT_FOLDER = os.path.join(current_directory, "Output")
+AUDIO_OUTPUT_PATH = os.path.join(OUTPUT_FOLDER, "temp.mp3")
+MINECRAFT_PARCORE_VIDS_FOLDER = os.path.join(current_directory, "split_videos")
 SCOPES = [
     'https://www.googleapis.com/auth/youtube.upload',
     'https://www.googleapis.com/auth/youtube.readonly'
 ]
+VIDEO_LENGTH_MINS = 1
+MIN_NUM_OF_COMMENTS = 10
+SUBREDDIT_NAME = "AskReddit"
+SUBREDDIT_LINK = f"https://www.reddit.com/r/{SUBREDDIT_NAME}/"
+MAX_AUDIO_DURATION_SECONDS = 60
+MIN_AUDIO_DURATION_SECONDS = 20
+CROP_TO_VERTICLE = True
 
 def get_authenticated_service(token_file='token.pickle', secrets_file='client_secrets.json'):
     creds = None
@@ -242,7 +250,7 @@ def get_media_duration(file_path: str) -> float:
         print(f"Error reading duration: {e}")
         return None
 
-def combine_audio_video(video_path: str, audio_path: str, output_path: str):
+def combine_audio_video_crop(video_path: str, audio_path: str, output_path: str):
     print("Combining audio and video...")
     print()
     ffmpeg_exe = os.path.join(FFMPEG_PATH, "ffmpeg.exe")
@@ -277,6 +285,41 @@ def combine_audio_video(video_path: str, audio_path: str, output_path: str):
     try:
         result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         print(f"Combined + cropped video saved as: {output_path}")
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg failed:\n", e.stderr)
+        raise
+    
+def combine_audio_video(video_path: str, audio_path: str, output_path: str):
+    print("Combining audio and video...")
+    print()
+    ffmpeg_exe = os.path.join(FFMPEG_PATH, "ffmpeg.exe")
+
+    #validate input files
+    for path in (video_path, audio_path):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"File not found: {path}")
+
+    #make ffmpeg command
+    cmd = [ffmpeg_exe, "-y", "-i", video_path]
+    cmd += ["-i", audio_path]
+
+    cmd += [
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-c:v", "libx264",
+        "-g", "30",
+        "-keyint_min", "30",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-shortest",
+        "-preset", "fast",
+        output_path
+    ]
+
+    # Run ffmpeg command
+    try:
+        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        print(f"Combined video saved as: {output_path}")
     except subprocess.CalledProcessError as e:
         print("FFmpeg failed:\n", e.stderr)
         raise
@@ -318,27 +361,27 @@ def main():
     try:
         #setup Chrome driver
         driver = setup_chrome_driver()
-        driver.get("https://www.reddit.com/r/AskReddit/")
+        driver.get(SUBREDDIT_LINK)
         randomised_sleep(2.0, 5.0)
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         randomised_sleep(1.0, 2.0)
-        askreddit_links_xpath = driver.find_elements(
+        reddit_links_xpath = driver.find_elements(
             By.XPATH,
-            "//a[starts-with(@href, '/r/AskReddit/comments/')]"
+            f"//a[starts-with(@href, '/r/{SUBREDDIT_NAME}/comments/')]"
         )
 
         #filter for only posts with enought replies
-        filtered_askreddit_links_xpath = []
-        for link in askreddit_links_xpath:
+        filtered_reddit_links_xpath = []
+        for link in reddit_links_xpath:
             parent_post = link.find_element(By.XPATH, "./ancestor::shreddit-post")
             comment_count = parent_post.get_attribute("comment-count")
-            if int(comment_count) > 10:
-                filtered_askreddit_links_xpath.append(link)
-        askreddit_links_xpath = filtered_askreddit_links_xpath
+            if int(comment_count) > MIN_NUM_OF_COMMENTS:
+                filtered_reddit_links_xpath.append(link)
+        reddit_links_xpath = filtered_reddit_links_xpath
 
         #choose story
         found_video = False
-        for random_link in askreddit_links_xpath:
+        for random_link in reddit_links_xpath:
             Title_text = random_link.text.strip() or "[No text]"
             if Title_text == "[No text]":
                 pass
@@ -350,7 +393,7 @@ def main():
         link_href = random_link.get_attribute("href")
 
         print(f"Randomly selected link: {Title_text}")
-        print("Clicking random AskReddit link...")
+        print("Clicking random reddit link...")
 
         #go to link for Question
         driver.get(str(link_href))
@@ -372,7 +415,7 @@ def main():
         Last_stop = 0
         Responces_text = f"{Title_text}? \n{Responces_text}"
         for index, charecter in enumerate(Responces_text):
-            if temp_count >= 155*4:
+            if temp_count >= (160 * 4 * VIDEO_LENGTH_MINS - 20):
                 break
             if charecter in LETTERS_COUNTED:
                 temp_count += 1
@@ -387,9 +430,9 @@ def main():
         audio_duration = audio_duration.__floor__() + 1
 
         #make sure video legth is acceptable
-        if audio_duration > 60:
+        if audio_duration > MAX_AUDIO_DURATION_SECONDS:
             raise Exception(f"Too long, video length of {audio_duration}s")
-        elif audio_duration < 20:
+        elif audio_duration < MIN_AUDIO_DURATION_SECONDS:
             raise Exception(f"Too short, video length of {audio_duration}s")
 
         #choose random parcore video
@@ -400,7 +443,10 @@ def main():
         #combine with reddit story with minecraft parcore
         Output_file_name = f"{Title_text[:20]}.mp4"
         no_sub_output_path = os.path.join(OUTPUT_FOLDER, Output_file_name)
-        combine_audio_video(parcore_video_random, AUDIO_OUTPUT_PATH, no_sub_output_path)
+        if CROP_TO_VERTICLE:
+            combine_audio_video_crop(parcore_video_random, AUDIO_OUTPUT_PATH, no_sub_output_path)
+        else:
+            combine_audio_video(parcore_video_random, AUDIO_OUTPUT_PATH, no_sub_output_path)
 
         #add subtitles
         Subbed_file_name = f"{Title_text[:20]} (subtitles).mp4"
@@ -420,6 +466,7 @@ def main():
             privacy_status='public',
             tags=['reddit', 'story', 'fyp']
         )
+        #add video to list of videos seen
         with open("Videos_seen.pkl", "wb") as videos_seen_file:
             videos_seen.append(Title_text)
             pickle.dump(videos_seen, videos_seen_file)
